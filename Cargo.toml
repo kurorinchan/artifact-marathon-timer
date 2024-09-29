@@ -1,0 +1,8 @@
+[package]
+name = "artifact-marathon-timer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gloo-storage = "0.3.0"
+leptos = { version = "0.6.15", features = ["csr"] }

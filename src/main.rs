@@ -61,7 +61,7 @@ fn local_datetime_to_javascript_time(local_datetime: DateTime<Local>) -> String 
 }
 
 #[component]
-fn DateTimeSet(initial_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl IntoView {
+fn DateTimeSet(initial_time_rw_signal: RwSignal<Option<DateTime<Utc>>>) -> impl IntoView {
     let date_signal = RwSignal::new(None);
     let time_signal = RwSignal::new(None);
     if let Ok(start_time) = get_start_time() {
@@ -90,7 +90,7 @@ fn DateTimeSet(initial_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl IntoView
 
         let utc_date_time = local_date_time.to_utc();
         save_start_time(utc_date_time);
-        initial_time_rw_signal.set(utc_date_time);
+        initial_time_rw_signal.set(Some(utc_date_time));
     });
 
     view! {
@@ -174,7 +174,7 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
 
 #[component]
 fn StartTimeToday(
-    iniitial_start_time: ReadSignal<DateTime<Utc>>,
+    iniitial_start_time: ReadSignal<Option<DateTime<Utc>>>,
     interval: ReadSignal<TimeDelta>,
 ) -> impl IntoView {
     fn todays_start_time(
@@ -206,6 +206,9 @@ fn StartTimeToday(
         {move || {
             let initial_start_time = iniitial_start_time.get();
             let interval = interval.get();
+            let Some(initial_start_time) = initial_start_time else {
+                return "不明".to_string();
+            };
 
             let initial_start_time: DateTime<Local> = DateTime::from(initial_start_time);
             let start_local_time = todays_start_time(initial_start_time, interval);
@@ -245,8 +248,8 @@ fn DebugFeatures() -> impl IntoView {
 }
 
 fn main() {
-    let start_time_rw_signal = create_rw_signal(Utc::now());
-    let interval_rw_signal = create_rw_signal(TimeDelta::zero());
+    let start_time_rw_signal: RwSignal<Option<DateTime<Utc>>> = create_rw_signal(None);
+    let interval_rw_signal: RwSignal<TimeDelta> = create_rw_signal(TimeDelta::zero());
     mount_to_body(move || {
         view! {
             <h1>"聖遺物マラソン開始時間計算"</h1>

@@ -41,12 +41,23 @@ fn get_start_interval() -> Result<TimeDelta> {
     TimeDelta::try_seconds(interval).ok_or(anyhow!("invalid interval"))
 }
 
+// Treats the parameters as dates and returns the TimeDelta.
+// In other words, the dates are treated as if they are midnight times and performs subtraction.
+// Example:
+//   from:   2024-09-30
+//   amount: 2024-09-28
+//   output: TimeDelta(days=2)
+fn subtract_dates(from: DateTime<Local>, amount: DateTime<Local>) -> TimeDelta {
+    TimeDelta::days(1) * (from.date_naive() - amount.date_naive()).num_days() as i32
+}
+
 // The time format is from input type=datetime-local.
 fn javascript_time_to_local(time_string: &str) -> Result<DateTime<Local>> {
     let naive_datetime = NaiveDateTime::parse_from_str(time_string, "%Y-%m-%dT%H:%M:%S")?;
     naive_datetime_to_local(naive_datetime)
 }
 
+// Convert NaiveDateTime to DateTime<Local>.
 fn naive_datetime_to_local(naive_datetime: NaiveDateTime) -> Result<DateTime<Local>> {
     let local_timezone = Local;
     let mapped_time = local_timezone.from_local_datetime(&naive_datetime);
@@ -96,8 +107,8 @@ fn DateTimeSet(initial_time_rw_signal: RwSignal<Option<DateTime<Utc>>>) -> impl 
     view! {
         <Flex>
             <label>"開始時刻: "</label>
-            <DatePicker value={date_signal} />
-            <TimePicker value={time_signal} />
+            <DatePicker value=date_signal/>
+            <TimePicker value=time_signal/>
         </Flex>
     }
 }
@@ -113,29 +124,30 @@ fn InitialRunStartTime(start_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl In
 
     view! {
         <div>
-        <label for="start-datetime">"開始時刻: "</label>
-        <input
-            name="start-datetime"
-            type="datetime-local"
-            prop:value=move || {
-                let js_time = local_datetime_to_javascript_time(start_time_local());
-                logging::log!("prop:value = {}", js_time);
-                js_time
-            }
-
-            step="1"
-            on:input=move |ev| {
-                logging::log!("input event fired!");
-                let value = event_target_value(&ev);
-                let local_datetime = javascript_time_to_local(&value);
-                if let Ok(datetime) = local_datetime {
-                    logging::log!("parsed datetime from input element: {:?}", datetime);
-                    let datetime = datetime.to_utc();
-                    set_start_time.set(datetime);
-                    save_start_time(datetime);
+            <label for="start-datetime">"開始時刻: "</label>
+            <input
+                name="start-datetime"
+                type="datetime-local"
+                prop:value=move || {
+                    let js_time = local_datetime_to_javascript_time(start_time_local());
+                    logging::log!("prop:value = {}", js_time);
+                    js_time
                 }
-            }
-        />
+
+                step="1"
+                on:input=move |ev| {
+                    logging::log!("input event fired!");
+                    let value = event_target_value(&ev);
+                    let local_datetime = javascript_time_to_local(&value);
+                    if let Ok(datetime) = local_datetime {
+                        logging::log!("parsed datetime from input element: {:?}", datetime);
+                        let datetime = datetime.to_utc();
+                        set_start_time.set(datetime);
+                        save_start_time(datetime);
+                    }
+                }
+            />
+
         </div>
     }
 }
@@ -155,11 +167,15 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
     view! {
         <div>
             <label for="interval-per-day">"毎日置きたい間隔(秒):"</label>
-            <input type="number" id="interval-per-day" name="interval-per-day" min="0"
+            <input
+                type="number"
+                id="interval-per-day"
+                name="interval-per-day"
+                min="0"
                 prop:value=move || interval.get().num_seconds()
-                on:input= move |ev| {
+                on:input=move |ev| {
                     let value = event_target_value(&ev);
-                    if let Ok(seconds) =value.parse::<i64>() {
+                    if let Ok(seconds) = value.parse::<i64>() {
                         logging::log!("Parsed interval: {}", seconds);
                         let seconds = TimeDelta::seconds(seconds);
                         set_interval.set(seconds);
@@ -167,7 +183,9 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
                     } else {
                         logging::error!("Failed to parse value to integer: {value}");
                     }
-                } />
+                }
+            />
+
         </div>
     }
 }
@@ -178,22 +196,16 @@ fn StartTimeToday(
     interval: ReadSignal<TimeDelta>,
 ) -> impl IntoView {
     fn todays_start_time(
-        iniitial_start_time: DateTime<Local>,
+        initial_start_time: DateTime<Local>,
         interval: TimeDelta,
     ) -> Option<DateTime<Local>> {
-        let now = Local::now();
-        let days_since_start = (now - iniitial_start_time).num_days();
-        if days_since_start < 0 {
+        let days_since_start = subtract_dates(Local::now(), initial_start_time);
+        if days_since_start.num_days() < 0 {
             return None;
         }
 
-        let today_start_time_no_interval_offset =
-            iniitial_start_time + TimeDelta::days(days_since_start);
-
-        let days_since_start = i32::try_from(days_since_start).ok()?;
-        let offset = interval * days_since_start;
-
-        Some(today_start_time_no_interval_offset + offset)
+        let offset = interval * days_since_start.num_days() as i32;
+        Some(initial_start_time + days_since_start + offset)
     }
 
     let today = Local::now();
@@ -201,24 +213,24 @@ fn StartTimeToday(
 
     view! {
         <div>
-        "今日(" {formatted_date} ")の開始時間は"
-        <span class="badge text-bg-primary">
-        {move || {
-            let initial_start_time = iniitial_start_time.get();
-            let interval = interval.get();
-            let Some(initial_start_time) = initial_start_time else {
-                return "不明".to_string();
-            };
+            "今日(" {formatted_date} ")の開始時間は"
+            <span class="badge text-bg-primary">
+                {move || {
+                    let initial_start_time = iniitial_start_time.get();
+                    let interval = interval.get();
+                    let Some(initial_start_time) = initial_start_time else {
+                        return "不明".to_string();
+                    };
+                    let initial_start_time: DateTime<Local> = DateTime::from(initial_start_time);
+                    let start_local_time = todays_start_time(initial_start_time, interval);
+                    if let Some(start_local_time) = start_local_time {
+                        start_local_time.format("%H:%M:%S").to_string()
+                    } else {
+                        "不明".to_string()
+                    }
+                }}
 
-            let initial_start_time: DateTime<Local> = DateTime::from(initial_start_time);
-            let start_local_time = todays_start_time(initial_start_time, interval);
-            if let Some(start_local_time) = start_local_time {
-                start_local_time.format("%H:%M:%S").to_string()
-            } else {
-                "不明".to_string()
-            }
-        }}
-        </span>
+            </span>
         </div>
     }
 }
@@ -240,9 +252,7 @@ fn DebugFeatures() -> impl IntoView {
         <div hidden=move || !switch_signal.get()>
             <Button on_click=move |_| {
                 gloo_storage::LocalStorage::clear();
-            }>
-            "Clear storage"
-            </Button>
+            }>"Clear storage"</Button>
         </div>
     }
 }
@@ -254,10 +264,10 @@ fn main() {
         view! {
             <h1>"聖遺物マラソン開始時間計算"</h1>
             <h2>
-            <StartTimeToday
-                iniitial_start_time=start_time_rw_signal.read_only()
-                interval=interval_rw_signal.read_only()
-            />
+                <StartTimeToday
+                    iniitial_start_time=start_time_rw_signal.read_only()
+                    interval=interval_rw_signal.read_only()
+                />
             </h2>
 
             <DateTimeSet initial_time_rw_signal=start_time_rw_signal/>

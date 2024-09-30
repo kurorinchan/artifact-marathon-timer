@@ -199,6 +199,7 @@ fn StartTimeToday(
     view! {
         <div>
         "今日の開始時間は"
+        <span class="badge text-bg-primary">
         {move || {
             let initial_start_time = iniitial_start_time.get();
             let interval = interval.get();
@@ -212,6 +213,7 @@ fn StartTimeToday(
             }
 
         }}
+        </span>
         </div>
     }
 }

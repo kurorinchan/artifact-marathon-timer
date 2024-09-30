@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use anyhow::Result;
+use chrono::naive;
 use chrono::Local;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
@@ -8,6 +9,7 @@ use gloo_storage::Storage;
 use leptos::*;
 
 use thaw::*;
+use web_sys::js_sys::Date;
 
 const START_TIME_KEY: &str = "start_time";
 const START_INTERVAL_KEY: &str = "interval";
@@ -39,38 +41,63 @@ fn get_start_interval() -> Result<TimeDelta> {
     TimeDelta::try_seconds(interval).ok_or(anyhow!("invalid interval"))
 }
 
-// The time format is like
+// The time format is from input type=datetime-local.
 fn javascript_time_to_local(time_string: &str) -> Result<DateTime<Local>> {
     let naive_datetime = NaiveDateTime::parse_from_str(time_string, "%Y-%m-%dT%H:%M:%S")?;
+    naive_datetime_to_local(naive_datetime)
+}
+
+fn naive_datetime_to_local(naive_datetime: NaiveDateTime) -> Result<DateTime<Local>> {
     let local_timezone = Local;
     let mapped_time = local_timezone.from_local_datetime(&naive_datetime);
     let local_datetime = mapped_time
         .single()
-        .ok_or(anyhow!("no local time found in {time_string}"))?;
+        .ok_or(anyhow!("no local time found in {naive_datetime}"))?;
     Ok(local_datetime)
 }
 
-fn local_datetime_to_javascrip_time(local_datetime: DateTime<Local>) -> String {
+fn local_datetime_to_javascript_time(local_datetime: DateTime<Local>) -> String {
     local_datetime.format("%Y-%m-%dT%H:%M:%S").to_string()
 }
 
 #[component]
-fn TimeSet() -> impl IntoView {
-    // Note. It has to have Some() to match the type. Seems like the documentation is currently
-    // wrong.
-    let value = RwSignal::new(Some(Local::now().time()));
+fn DateTimeSet(initial_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl IntoView {
+    let date_signal = RwSignal::new(Some(Local::now().date_naive()));
+    let time_signal = RwSignal::new(Some(Local::now().time()));
     if let Ok(start_time) = get_start_time() {
-        let local_time = Local.from_utc_datetime(&start_time.naive_utc());
-        value.set(Some(local_time.time()));
+        let local_time: DateTime<Local> = DateTime::from(start_time);
+        date_signal.set(Some(local_time.date_naive()));
+        time_signal.set(Some(local_time.time()));
     }
 
     create_effect(move |_| {
-        logging::log!("New TimeSet via timepicker to: {:?}", value.get());
+        let new_time = time_signal.get();
+        let new_date = date_signal.get();
+
+        let (Some(new_time), Some(new_date)) = (new_time, new_date) else {
+            logging::log!("new_time {:?} or new_date {:?} is None", new_time, new_date);
+            return;
+        };
+        logging::log!("New TimeSet via timepicker to: {:?}", new_time);
+        logging::log!("New TimeSet via date to: {:?}", new_date);
+        let new_date_time = NaiveDateTime::new(new_date, new_time);
+        logging::log!("New TimeSet to: {:?}", new_date_time);
+        let local_date_time = naive_datetime_to_local(new_date_time);
+        let Ok(local_date_time) = local_date_time else {
+            logging::error!("local_date_time is None");
+            return;
+        };
+
+        let utc_date_time = local_date_time.to_utc();
+        save_start_time(utc_date_time);
+        initial_time_rw_signal.set(utc_date_time);
     });
 
     view! {
-        <Flex vertical=true>
-            <TimePicker value={value} />
+        <Flex>
+            <label>"開始時刻: "</label>
+            <DatePicker value={date_signal} />
+            <TimePicker value={time_signal} />
         </Flex>
     }
 }
@@ -91,7 +118,7 @@ fn InitialRunStartTime(start_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl In
             name="start-datetime"
             type="datetime-local"
             prop:value=move || {
-                let js_time = local_datetime_to_javascrip_time(start_time_local());
+                let js_time = local_datetime_to_javascript_time(start_time_local());
                 logging::log!("prop:value = {}", js_time);
                 js_time
             }
@@ -114,7 +141,7 @@ fn InitialRunStartTime(start_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl In
 }
 
 #[component]
-fn interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
+fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
     // TODO: add a tooltip.
     // example:
     // https://flowbite.com/docs/components/tooltips/
@@ -194,13 +221,12 @@ fn main() {
     let interval_rw_signal = create_rw_signal(TimeDelta::zero());
     mount_to_body(move || {
         view! {
-            <InitialRunStartTime start_time_rw_signal=start_time_rw_signal/>
+            <DateTimeSet initial_time_rw_signal=start_time_rw_signal/>
             <Interval interval_rw_signal=interval_rw_signal/>
             <StartTimeToday
                 iniitial_start_time=start_time_rw_signal.read_only()
                 interval=interval_rw_signal.read_only()
             />
-            <TimeSet />
         }
     });
 }

@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use anyhow::Result;
+use chrono::Datelike;
 use chrono::FixedOffset;
 use chrono::Local;
 use chrono::NaiveDateTime;
@@ -7,7 +8,10 @@ use chrono::TimeZone;
 use chrono::{DateTime, TimeDelta, Utc};
 use gloo_storage::Storage;
 use leptos::*;
+use svg::view;
 use web_sys::js_sys::Date;
+
+use leptos_element_plus::components::el_date_time_picker::DateTimePicker;
 
 const START_TIME_KEY: &str = "start_time";
 const START_INTERVAL_KEY: &str = "interval";
@@ -60,8 +64,15 @@ fn local_datetime_to_javascrip_time(local_datetime: DateTime<Local>) -> String {
 }
 
 #[component]
-fn StartTime() -> impl IntoView {
-    let (start_time, set_start_time) = create_signal(Utc::now());
+fn TimeSet() -> impl IntoView {
+    view! {
+        <input type="time" />
+    }
+}
+
+#[component]
+fn InitialRunStartTime(start_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl IntoView {
+    let (start_time, set_start_time) = start_time_rw_signal.split();
     if let Ok(start) = get_start_time() {
         set_start_time.set(start);
     }
@@ -69,7 +80,10 @@ fn StartTime() -> impl IntoView {
     let start_time_local = move || -> DateTime<Local> { DateTime::from(start_time.get()) };
 
     view! {
+        <div>
+        <label for="start-datetime">"開始時刻: "</label>
         <input
+            name="start-datetime"
             type="datetime-local"
             prop:value=move || {
                 let js_time = local_datetime_to_javascrip_time(start_time_local());
@@ -90,9 +104,97 @@ fn StartTime() -> impl IntoView {
                 }
             }
         />
+        </div>
+    }
+}
+
+#[component]
+fn interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
+    // TODO: add a tooltip.
+    // example:
+    // https://flowbite.com/docs/components/tooltips/
+    // Consider warning user of 0 sec interval. They might end up "catching up" and missing a few
+    // artifacts.
+    let (interval, set_interval) = interval_rw_signal.split();
+    if let Ok(saved_interval) = get_start_interval() {
+        set_interval.set(saved_interval);
+    }
+
+    view! {
+        <div>
+            <label for="interval-per-day">"毎日置きたい間隔(秒):"</label>
+            <input type="number" id="interval-per-day" name="interval-per-day" min="0"
+                prop:value=move || interval.get().num_seconds()
+                on:input= move |ev| {
+                    let value = event_target_value(&ev);
+                    if let Ok(seconds) =value.parse::<i64>() {
+                        logging::log!("Parsed interval: {}", seconds);
+                        let seconds = TimeDelta::seconds(seconds);
+                        set_interval.set(seconds);
+                        save_start_interval(seconds);
+                    } else {
+                        logging::error!("Failed to parse value to integer: {value}");
+                    }
+                } />
+        </div>
+    }
+}
+
+#[component]
+fn StartTimeToday(
+    iniitial_start_time: ReadSignal<DateTime<Utc>>,
+    interval: ReadSignal<TimeDelta>,
+) -> impl IntoView {
+    fn todays_start_time(
+        iniitial_start_time: DateTime<Local>,
+        interval: TimeDelta,
+    ) -> Option<DateTime<Local>> {
+        let now = Local::now();
+        let days_since_start = (now - iniitial_start_time).num_days();
+        if days_since_start < 0 {
+            return None;
+        }
+
+        let today_start_time_no_interval_offset =
+            iniitial_start_time + TimeDelta::days(days_since_start);
+
+        let days_since_start = i32::try_from(days_since_start).ok()?;
+        let offset = interval * days_since_start;
+
+        Some(today_start_time_no_interval_offset + offset)
+    }
+
+    view! {
+        <div>
+        "今日の開始時間は"
+        {move || {
+            let initial_start_time = iniitial_start_time.get();
+            let interval = interval.get();
+
+            let initial_start_time: DateTime<Local> = DateTime::from(initial_start_time);
+            let start_local_time = todays_start_time(initial_start_time, interval);
+            if let Some(start_local_time) = start_local_time {
+                start_local_time.format("%H:%M:%S").to_string()
+            } else {
+                "不明".to_string()
+            }
+
+        }}
+        </div>
     }
 }
 
 fn main() {
-    mount_to_body(|| view! { <StartTime/> });
+    let start_time_rw_signal = create_rw_signal(Utc::now());
+    let interval_rw_signal = create_rw_signal(TimeDelta::zero());
+    mount_to_body(move || {
+        view! {
+            <InitialRunStartTime start_time_rw_signal=start_time_rw_signal/>
+            <Interval interval_rw_signal=interval_rw_signal/>
+            <StartTimeToday
+                iniitial_start_time=start_time_rw_signal.read_only()
+                interval=interval_rw_signal.read_only()
+            />
+        }
+    });
 }

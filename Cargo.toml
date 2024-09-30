@@ -9,3 +9,4 @@ chrono = { version = "0.4.38", features = ["serde"] }
 gloo-storage = "0.3.0"
 leptos = { version = "0.6.15", features = ["csr"] }
 leptos_element_plus = "=0.0.6"
+thaw = "0.3.4"

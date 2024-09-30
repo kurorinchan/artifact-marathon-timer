@@ -1,20 +1,18 @@
 use anyhow::anyhow;
 use anyhow::Result;
-use chrono::Datelike;
-use chrono::FixedOffset;
 use chrono::Local;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::{DateTime, TimeDelta, Utc};
 use gloo_storage::Storage;
 use leptos::*;
-use svg::view;
-use web_sys::js_sys::Date;
 
-use leptos_element_plus::components::el_date_time_picker::DateTimePicker;
+use thaw::*;
 
 const START_TIME_KEY: &str = "start_time";
 const START_INTERVAL_KEY: &str = "interval";
+
+const TIME_KEY_EXPERIMENT: &str = "experimental_time_key";
 
 fn save_start_time(start_time: DateTime<Utc>) -> Result<()> {
     leptos::logging::log!("saving start time: {:?}", start_time);
@@ -41,13 +39,6 @@ fn get_start_interval() -> Result<TimeDelta> {
     TimeDelta::try_seconds(interval).ok_or(anyhow!("invalid interval"))
 }
 
-fn get_local_time_offset() -> i32 {
-    //let now_fixed_offset: DateTime<FixedOffset> = Local::now().into();
-
-    //now_fixed_offset.offset().local_minus_utc()
-    Local::now().offset().local_minus_utc()
-}
-
 // The time format is like
 fn javascript_time_to_local(time_string: &str) -> Result<DateTime<Local>> {
     let naive_datetime = NaiveDateTime::parse_from_str(time_string, "%Y-%m-%dT%H:%M:%S")?;
@@ -65,8 +56,22 @@ fn local_datetime_to_javascrip_time(local_datetime: DateTime<Local>) -> String {
 
 #[component]
 fn TimeSet() -> impl IntoView {
+    // Note. It has to have Some() to match the type. Seems like the documentation is currently
+    // wrong.
+    let value = RwSignal::new(Some(Local::now().time()));
+    if let Ok(start_time) = get_start_time() {
+        let local_time = Local.from_utc_datetime(&start_time.naive_utc());
+        value.set(Some(local_time.time()));
+    }
+
+    create_effect(move |_| {
+        logging::log!("New TimeSet via timepicker to: {:?}", value.get());
+    });
+
     view! {
-        <input type="time" />
+        <Flex vertical=true>
+            <TimePicker value={value} />
+        </Flex>
     }
 }
 
@@ -195,6 +200,7 @@ fn main() {
                 iniitial_start_time=start_time_rw_signal.read_only()
                 interval=interval_rw_signal.read_only()
             />
+            <TimeSet />
         }
     });
 }

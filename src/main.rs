@@ -62,8 +62,8 @@ fn local_datetime_to_javascript_time(local_datetime: DateTime<Local>) -> String 
 
 #[component]
 fn DateTimeSet(initial_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl IntoView {
-    let date_signal = RwSignal::new(Some(Local::now().date_naive()));
-    let time_signal = RwSignal::new(Some(Local::now().time()));
+    let date_signal = RwSignal::new(None);
+    let time_signal = RwSignal::new(None);
     if let Ok(start_time) = get_start_time() {
         let local_time: DateTime<Local> = DateTime::from(start_time);
         date_signal.set(Some(local_time.date_naive()));
@@ -218,17 +218,48 @@ fn StartTimeToday(
     }
 }
 
+#[component]
+fn DebugFeatures() -> impl IntoView {
+    let switch_signal = create_rw_signal(false);
+    create_effect(move |_| {
+        if switch_signal.get() {
+            logging::log!("Debug features are on");
+        } else {
+            logging::log!("Debug features are off");
+        }
+    });
+
+    view! {
+        "開発用"
+        <Switch value=switch_signal/>
+        <div hidden=move || !switch_signal.get()>
+            <Button on_click=move |_| {
+                gloo_storage::LocalStorage::clear();
+            }>
+            "Clear storage"
+            </Button>
+        </div>
+    }
+}
+
 fn main() {
     let start_time_rw_signal = create_rw_signal(Utc::now());
     let interval_rw_signal = create_rw_signal(TimeDelta::zero());
     mount_to_body(move || {
         view! {
-            <DateTimeSet initial_time_rw_signal=start_time_rw_signal/>
-            <Interval interval_rw_signal=interval_rw_signal/>
+            <h1>"聖遺物マラソン開始時間計算"</h1>
+            <h2>
             <StartTimeToday
                 iniitial_start_time=start_time_rw_signal.read_only()
                 interval=interval_rw_signal.read_only()
             />
+            </h2>
+
+            <DateTimeSet initial_time_rw_signal=start_time_rw_signal/>
+            <Interval interval_rw_signal=interval_rw_signal/>
+            <hr/>
+
+            <DebugFeatures/>
         }
     });
 }

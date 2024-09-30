@@ -196,9 +196,12 @@ fn StartTimeToday(
         Some(today_start_time_no_interval_offset + offset)
     }
 
+    let today = Local::now();
+    let formatted_date = today.format("%Y-%m-%d").to_string();
+
     view! {
         <div>
-        "今日の開始時間は"
+        "今日(" {formatted_date} ")の開始時間は"
         <span class="badge text-bg-primary">
         {move || {
             let initial_start_time = iniitial_start_time.get();
@@ -211,7 +214,6 @@ fn StartTimeToday(
             } else {
                 "不明".to_string()
             }
-
         }}
         </span>
         </div>

@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use anyhow::Result;
-use chrono::naive;
 use chrono::Local;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
@@ -9,12 +8,9 @@ use gloo_storage::Storage;
 use leptos::*;
 
 use thaw::*;
-use web_sys::js_sys::Date;
 
 const START_TIME_KEY: &str = "start_time";
 const START_INTERVAL_KEY: &str = "interval";
-
-const TIME_KEY_EXPERIMENT: &str = "experimental_time_key";
 
 fn save_start_time(start_time: DateTime<Utc>) -> Result<()> {
     leptos::logging::log!("saving start time: {:?}", start_time);
@@ -51,12 +47,6 @@ fn subtract_dates(from: DateTime<Local>, amount: DateTime<Local>) -> TimeDelta {
     TimeDelta::days(1) * (from.date_naive() - amount.date_naive()).num_days() as i32
 }
 
-// The time format is from input type=datetime-local.
-fn javascript_time_to_local(time_string: &str) -> Result<DateTime<Local>> {
-    let naive_datetime = NaiveDateTime::parse_from_str(time_string, "%Y-%m-%dT%H:%M:%S")?;
-    naive_datetime_to_local(naive_datetime)
-}
-
 // Convert NaiveDateTime to DateTime<Local>.
 fn naive_datetime_to_local(naive_datetime: NaiveDateTime) -> Result<DateTime<Local>> {
     let local_timezone = Local;
@@ -65,10 +55,6 @@ fn naive_datetime_to_local(naive_datetime: NaiveDateTime) -> Result<DateTime<Loc
         .single()
         .ok_or(anyhow!("no local time found in {naive_datetime}"))?;
     Ok(local_datetime)
-}
-
-fn local_datetime_to_javascript_time(local_datetime: DateTime<Local>) -> String {
-    local_datetime.format("%Y-%m-%dT%H:%M:%S").to_string()
 }
 
 #[component]
@@ -110,45 +96,6 @@ fn DateTimeSet(initial_time_rw_signal: RwSignal<Option<DateTime<Utc>>>) -> impl 
             <DatePicker value=date_signal/>
             <TimePicker value=time_signal/>
         </Flex>
-    }
-}
-
-#[component]
-fn InitialRunStartTime(start_time_rw_signal: RwSignal<DateTime<Utc>>) -> impl IntoView {
-    let (start_time, set_start_time) = start_time_rw_signal.split();
-    if let Ok(start) = get_start_time() {
-        set_start_time.set(start);
-    }
-
-    let start_time_local = move || -> DateTime<Local> { DateTime::from(start_time.get()) };
-
-    view! {
-        <div>
-            <label for="start-datetime">"開始時刻: "</label>
-            <input
-                name="start-datetime"
-                type="datetime-local"
-                prop:value=move || {
-                    let js_time = local_datetime_to_javascript_time(start_time_local());
-                    logging::log!("prop:value = {}", js_time);
-                    js_time
-                }
-
-                step="1"
-                on:input=move |ev| {
-                    logging::log!("input event fired!");
-                    let value = event_target_value(&ev);
-                    let local_datetime = javascript_time_to_local(&value);
-                    if let Ok(datetime) = local_datetime {
-                        logging::log!("parsed datetime from input element: {:?}", datetime);
-                        let datetime = datetime.to_utc();
-                        set_start_time.set(datetime);
-                        save_start_time(datetime);
-                    }
-                }
-            />
-
-        </div>
     }
 }
 

@@ -130,7 +130,7 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
                         set_interval.set(seconds);
                         save_start_interval(seconds);
                     } else {
-                        logging::error!("Failed to parse value to integer: {value}");
+                        logging::error!("Failed to parse value to integer: '{value}'");
                     }
                 }
             />
@@ -157,8 +157,7 @@ fn StartTimeToday(
         Some(initial_start_time + days_since_start + offset)
     }
 
-    let today = Local::now();
-    let formatted_date = today.format("%Y-%m-%d").to_string();
+    let (date_today, set_date_today) = create_signal(Local::now());
 
     let (current_time, set_current_time) = create_signal(Local::now());
     use_interval_fn(
@@ -168,14 +167,22 @@ fn StartTimeToday(
         1000,
     );
 
+    create_effect(move |_| {
+        let now = current_time.get();
+        let diff = subtract_dates(now, date_today.get());
+        if diff.num_days() != 0 {
+            set_date_today.set(now);
+        }
+    });
+
     view! {
         <div>
             "現在時刻:"
-            {move || current_time.get().format("%Y-%m-%d %H:%M:%S").to_string()}
+            {move || current_time.get().format("%H:%M:%S").to_string()}
         </div>
 
         <div>
-            "今日(" {formatted_date} ")の開始時間は"
+            "今日(" {move || date_today.get().format("%Y-%m-%d").to_string()} ")の開始時間は"
             <span class="badge text-bg-primary">
                 {move || {
                     let initial_start_time = iniitial_start_time.get();

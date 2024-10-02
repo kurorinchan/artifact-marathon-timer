@@ -7,6 +7,8 @@ use chrono::{DateTime, TimeDelta, Utc};
 use gloo_storage::Storage;
 use leptos::*;
 
+use leptos_use::*;
+
 use thaw::*;
 
 const START_TIME_KEY: &str = "start_time";
@@ -158,7 +160,20 @@ fn StartTimeToday(
     let today = Local::now();
     let formatted_date = today.format("%Y-%m-%d").to_string();
 
+    let (current_time, set_current_time) = create_signal(Local::now());
+    use_interval_fn(
+        move || {
+            set_current_time.set(Local::now());
+        },
+        1000,
+    );
+
     view! {
+        <div>
+            "現在時刻:"
+            {move || current_time.get().format("%Y-%m-%d %H:%M:%S").to_string()}
+        </div>
+
         <div>
             "今日(" {formatted_date} ")の開始時間は"
             <span class="badge text-bg-primary">
@@ -183,6 +198,25 @@ fn StartTimeToday(
 }
 
 #[component]
+fn ThemeSwitcher() -> impl IntoView {
+    let set_html_theme = move |theme: &str| {
+        let document = use_document();
+        let body = document.body();
+        body.expect("body should exist")
+            .set_attribute("data-bs-theme", theme)
+            .unwrap();
+    };
+    view! {
+        <Button class="btn btn-dark border" on_click=move |_| {
+            set_html_theme("dark");
+        }>"Dark"</Button>
+        <Button class="btn btn-light border" on_click=move |_| {
+            set_html_theme("light");
+        }>"Light"</Button>
+    }
+}
+
+#[component]
 fn DebugFeatures() -> impl IntoView {
     let switch_signal = create_rw_signal(false);
     create_effect(move |_| {
@@ -195,7 +229,7 @@ fn DebugFeatures() -> impl IntoView {
 
     view! {
         "開発用"
-        <Switch value=switch_signal/>
+        <Switch value=switch_signal class="border"/>
         <div hidden=move || !switch_signal.get()>
             <Button on_click=move |_| {
                 gloo_storage::LocalStorage::clear();
@@ -219,9 +253,29 @@ fn main() {
 
             <DateTimeSet initial_time_rw_signal=start_time_rw_signal/>
             <Interval interval_rw_signal=interval_rw_signal/>
+            <ThemeSwitcher/>
             <hr/>
 
             <DebugFeatures/>
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subtract_dates_negative_days() {
+        let start = Local.ymd(2022, 5, 1).and_hms(0, 0, 0);
+        let end = Local.ymd(2022, 5, 2).and_hms(0, 0, 0);
+        assert_eq!(subtract_dates(start, end), TimeDelta::days(-1));
+    }
+
+    #[test]
+    fn test_subtract_dates_positive_days() {
+        let start = Local.ymd(2022, 5, 3).and_hms(0, 0, 0);
+        let end = Local.ymd(2022, 5, 2).and_hms(0, 0, 0);
+        assert_eq!(subtract_dates(start, end), TimeDelta::days(1));
+    }
 }

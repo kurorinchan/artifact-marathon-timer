@@ -15,14 +15,11 @@ const START_TIME_KEY: &str = "start_time";
 const START_INTERVAL_KEY: &str = "interval";
 
 fn save_start_time(start_time: DateTime<Utc>) -> Result<()> {
-    leptos::logging::log!("saving start time: {:?}", start_time);
     Ok(gloo_storage::LocalStorage::set(START_TIME_KEY, start_time)?)
 }
 
 fn get_start_time() -> Result<DateTime<Utc>> {
-    leptos::logging::log!("loading start time");
     let get = gloo_storage::LocalStorage::get(START_TIME_KEY);
-    logging::log!("from storage: {:?}", get);
     Ok(get?)
 }
 
@@ -77,10 +74,7 @@ fn DateTimeSet(initial_time_rw_signal: RwSignal<Option<DateTime<Utc>>>) -> impl 
             logging::log!("new_time {:?} or new_date {:?} is None", new_time, new_date);
             return;
         };
-        logging::log!("New TimeSet via timepicker to: {:?}", new_time);
-        logging::log!("New TimeSet via date to: {:?}", new_date);
         let new_date_time = NaiveDateTime::new(new_date, new_time);
-        logging::log!("New TimeSet to: {:?}", new_date_time);
         let local_date_time = naive_datetime_to_local(new_date_time);
         let Ok(local_date_time) = local_date_time else {
             logging::error!("local_date_time is None");
@@ -125,7 +119,6 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
                 on:input=move |ev| {
                     let value = event_target_value(&ev);
                     if let Ok(seconds) = value.parse::<i64>() {
-                        logging::log!("Parsed interval: {}", seconds);
                         let seconds = TimeDelta::seconds(seconds);
                         set_interval.set(seconds);
                         save_start_interval(seconds);

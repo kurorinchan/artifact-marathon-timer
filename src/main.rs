@@ -278,4 +278,13 @@ mod tests {
         let end = Local.ymd(2022, 5, 2).and_hms(0, 0, 0);
         assert_eq!(subtract_dates(start, end), TimeDelta::days(1));
     }
+
+    // Even though they are only different by 1 second, the result should be 1 day since the
+    // dates are different.
+    #[test]
+    fn test_subtract_dates_only_1_sec_diff() {
+        let start = Local.ymd(2023, 7, 3).and_hms(0, 0, 0);
+        let end = Local.ymd(2023, 7, 2).and_hms(23, 59, 59);
+        assert_eq!(subtract_dates(start, end), TimeDelta::days(1));
+    }
 }

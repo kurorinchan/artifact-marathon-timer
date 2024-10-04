@@ -89,8 +89,8 @@ fn DateTimeSet(initial_time_rw_signal: RwSignal<Option<DateTime<Utc>>>) -> impl 
     view! {
         <Flex>
             <label>"開始時刻: "</label>
-            <DatePicker value=date_signal/>
-            <TimePicker value=time_signal/>
+            <DatePicker value=date_signal />
+            <TimePicker value=time_signal />
         </Flex>
     }
 }
@@ -169,15 +169,17 @@ fn StartTimeToday(
     });
 
     view! {
-        <div>
-            "現在時刻:"
-            {move || current_time.get().format("%H:%M:%S").to_string()}
-        </div>
+        <div>"現在時刻:" {move || current_time.get().format("%H:%M:%S").to_string()}</div>
 
         <div>
-            "今日(" {move || date_today.get().format("%Y-%m-%d").to_string()} ")の開始時間は"
+            "今日(" {move || date_today.get().format("%Y-%m-%d").to_string()}
+            ")の開始時間は"
             <span class="badge text-bg-primary">
+                // Access the date today so that this gets updated every day.
+                // The value is not used, since the time is calculated independent of the value.
+                // Note: This comment cannot be in the block below. Leptosfmt deletes it.
                 {move || {
+                    let _ = date_today.get();
                     let initial_start_time = iniitial_start_time.get();
                     let interval = interval.get();
                     let Some(initial_start_time) = initial_start_time else {
@@ -207,12 +209,22 @@ fn ThemeSwitcher() -> impl IntoView {
             .unwrap();
     };
     view! {
-        <Button class="btn btn-dark border" on_click=move |_| {
-            set_html_theme("dark");
-        }>"Dark"</Button>
-        <Button class="btn btn-light border" on_click=move |_| {
-            set_html_theme("light");
-        }>"Light"</Button>
+        <Button
+            class="btn btn-dark border"
+            on_click=move |_| {
+                set_html_theme("dark");
+            }
+        >
+            "Dark"
+        </Button>
+        <Button
+            class="btn btn-light border"
+            on_click=move |_| {
+                set_html_theme("light");
+            }
+        >
+            "Light"
+        </Button>
     }
 }
 
@@ -229,7 +241,7 @@ fn DebugFeatures() -> impl IntoView {
 
     view! {
         "開発用"
-        <Switch value=switch_signal class="border"/>
+        <Switch value=switch_signal class="border" />
         <div hidden=move || !switch_signal.get()>
             <Button on_click=move |_| {
                 gloo_storage::LocalStorage::clear();
@@ -251,12 +263,12 @@ fn main() {
                 />
             </h2>
 
-            <DateTimeSet initial_time_rw_signal=start_time_rw_signal/>
-            <Interval interval_rw_signal=interval_rw_signal/>
-            <ThemeSwitcher/>
-            <hr/>
+            <DateTimeSet initial_time_rw_signal=start_time_rw_signal />
+            <Interval interval_rw_signal=interval_rw_signal />
+            <ThemeSwitcher />
+            <hr />
 
-            <DebugFeatures/>
+            <DebugFeatures />
         }
     });
 }

@@ -265,7 +265,6 @@ fn main() {
 
             <DateTimeSet initial_time_rw_signal=start_time_rw_signal />
             <Interval interval_rw_signal=interval_rw_signal />
-            <ThemeSwitcher />
             <hr />
 
             <DebugFeatures />

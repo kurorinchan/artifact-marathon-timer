@@ -134,7 +134,7 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
 
 #[component]
 fn StartTimeToday(
-    iniitial_start_time: ReadSignal<Option<DateTime<Utc>>>,
+    #[prop(into)] get_initial_start_time: Callback<(), Option<DateTime<Utc>>>,
     interval: ReadSignal<TimeDelta>,
 ) -> impl IntoView {
     fn todays_start_time(
@@ -180,7 +180,7 @@ fn StartTimeToday(
                 // Note: This comment cannot be in the block below. Leptosfmt deletes it.
                 {move || {
                     let _ = date_today.get();
-                    let initial_start_time = iniitial_start_time.get();
+                    let initial_start_time = get_initial_start_time.call(());
                     let interval = interval.get();
                     let Some(initial_start_time) = initial_start_time else {
                         return "不明".to_string();
@@ -251,36 +251,35 @@ fn DebugFeatures() -> impl IntoView {
 }
 
 fn main() {
-    let start_time_rw_signal: RwSignal<Option<DateTime<Utc>>> = create_rw_signal(None);
     let interval_rw_signal: RwSignal<TimeDelta> = create_rw_signal(TimeDelta::zero());
 
+    // These are the source of truth for the start time.
     let date_signal: RwSignal<Option<NaiveDate>> = RwSignal::new(None);
     let time_signal: RwSignal<Option<NaiveTime>> = RwSignal::new(None);
 
-    // Effect for setting the initial start time, when the user interacts with the DatePicker
-    // or the TimePicker.
-    create_effect(move |_| {
+    // Memoized drived signal for calculating the initial start time in UTC, when the user
+    // interacts with the DatePicker or the TimePicker.
+    // Note that the start time is saved to local storage.
+    let get_initial_start_time = create_memo(move |_| {
         let new_time = time_signal.get();
         let new_date = date_signal.get();
 
         let (Some(new_time), Some(new_date)) = (new_time, new_date) else {
             logging::log!("new_time {:?} or new_date {:?} is None", new_time, new_date);
-            return;
+            return None;
         };
         let new_date_time = NaiveDateTime::new(new_date, new_time);
         let local_date_time = naive_datetime_to_local(new_date_time);
         let Ok(local_date_time) = local_date_time else {
             logging::error!("local_date_time is None");
-            return;
+            return None;
         };
 
         let utc_date_time = local_date_time.to_utc();
         save_start_time(utc_date_time);
-        start_time_rw_signal.set(Some(utc_date_time));
+        Some(utc_date_time)
     });
 
-    // DO NOT USE start_time_rw_signal.set(). It causes an infinite loop with
-    // the effect above.
     let set_start_time = move |new_time: DateTime<Local>| {
         date_signal.set(Some(new_time.date_naive()));
         time_signal.set(Some(new_time.time()));
@@ -291,7 +290,7 @@ fn main() {
             <h1>"聖遺物マラソン開始時間計算"</h1>
             <h2>
                 <StartTimeToday
-                    iniitial_start_time=start_time_rw_signal.read_only()
+                    get_initial_start_time=move |_| get_initial_start_time.get()
                     interval=interval_rw_signal.read_only()
                 />
             </h2>

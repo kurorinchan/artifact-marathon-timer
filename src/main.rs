@@ -81,20 +81,13 @@ fn DateTimeSet(
 // Component to use the current time as start time.
 #[component]
 fn SetCurrentTimeAsStartTime(
-    set_date: WriteSignal<Option<NaiveDate>>,
-    set_time: WriteSignal<Option<NaiveTime>>,
+    #[prop(into)] set_start_time: Callback<DateTime<Local>>,
 ) -> impl IntoView {
-    let update_start_time = move || {
-        let now = Local::now();
-        set_date.set(Some(now.date_naive()));
-        set_time.set(Some(now.time()));
-    };
-
     view! {
         <Button
             class="btn btn-primary"
             on:click=move |_| {
-                update_start_time();
+                set_start_time.call(Local::now());
             }
         >
             "現在時刻を開始時刻として保存"
@@ -286,6 +279,13 @@ fn main() {
         start_time_rw_signal.set(Some(utc_date_time));
     });
 
+    // DO NOT USE start_time_rw_signal.set(). It causes an infinite loop with
+    // the effect above.
+    let set_start_time = move |new_time: DateTime<Local>| {
+        date_signal.set(Some(new_time.date_naive()));
+        time_signal.set(Some(new_time.time()));
+    };
+
     mount_to_body(move || {
         view! {
             <h1>"聖遺物マラソン開始時間計算"</h1>
@@ -297,10 +297,7 @@ fn main() {
             </h2>
 
             <DateTimeSet date_signal time_signal />
-            <SetCurrentTimeAsStartTime
-                set_date=date_signal.write_only()
-                set_time=time_signal.write_only()
-            />
+            <SetCurrentTimeAsStartTime set_start_time />
             <Interval interval_rw_signal=interval_rw_signal />
             <hr />
 

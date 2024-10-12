@@ -1,7 +1,9 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use chrono::Local;
+use chrono::NaiveDate;
 use chrono::NaiveDateTime;
+use chrono::NaiveTime;
 use chrono::TimeZone;
 use chrono::{DateTime, TimeDelta, Utc};
 use gloo_storage::Storage;
@@ -57,34 +59,15 @@ fn naive_datetime_to_local(naive_datetime: NaiveDateTime) -> Result<DateTime<Loc
 }
 
 #[component]
-fn DateTimeSet(initial_time_rw_signal: RwSignal<Option<DateTime<Utc>>>) -> impl IntoView {
-    let date_signal = RwSignal::new(None);
-    let time_signal = RwSignal::new(None);
+fn DateTimeSet(
+    date_signal: RwSignal<Option<NaiveDate>>,
+    time_signal: RwSignal<Option<NaiveTime>>,
+) -> impl IntoView {
     if let Ok(start_time) = get_start_time() {
         let local_time: DateTime<Local> = DateTime::from(start_time);
         date_signal.set(Some(local_time.date_naive()));
         time_signal.set(Some(local_time.time()));
     }
-
-    create_effect(move |_| {
-        let new_time = time_signal.get();
-        let new_date = date_signal.get();
-
-        let (Some(new_time), Some(new_date)) = (new_time, new_date) else {
-            logging::log!("new_time {:?} or new_date {:?} is None", new_time, new_date);
-            return;
-        };
-        let new_date_time = NaiveDateTime::new(new_date, new_time);
-        let local_date_time = naive_datetime_to_local(new_date_time);
-        let Ok(local_date_time) = local_date_time else {
-            logging::error!("local_date_time is None");
-            return;
-        };
-
-        let utc_date_time = local_date_time.to_utc();
-        save_start_time(utc_date_time);
-        initial_time_rw_signal.set(Some(utc_date_time));
-    });
 
     view! {
         <Flex>
@@ -92,6 +75,30 @@ fn DateTimeSet(initial_time_rw_signal: RwSignal<Option<DateTime<Utc>>>) -> impl 
             <DatePicker value=date_signal />
             <TimePicker value=time_signal />
         </Flex>
+    }
+}
+
+// Component to use the current time as start time.
+#[component]
+fn SetCurrentTimeAsStartTime(
+    set_date: WriteSignal<Option<NaiveDate>>,
+    set_time: WriteSignal<Option<NaiveTime>>,
+) -> impl IntoView {
+    let update_start_time = move || {
+        let now = Local::now();
+        set_date.set(Some(now.date_naive()));
+        set_time.set(Some(now.time()));
+    };
+
+    view! {
+        <Button
+            class="btn btn-primary"
+            on:click=move |_| {
+                update_start_time();
+            }
+        >
+            "現在時刻を開始時刻として保存"
+        </Button>
     }
 }
 
@@ -253,6 +260,32 @@ fn DebugFeatures() -> impl IntoView {
 fn main() {
     let start_time_rw_signal: RwSignal<Option<DateTime<Utc>>> = create_rw_signal(None);
     let interval_rw_signal: RwSignal<TimeDelta> = create_rw_signal(TimeDelta::zero());
+
+    let date_signal: RwSignal<Option<NaiveDate>> = RwSignal::new(None);
+    let time_signal: RwSignal<Option<NaiveTime>> = RwSignal::new(None);
+
+    // Effect for setting the initial start time, when the user interacts with the DatePicker
+    // or the TimePicker.
+    create_effect(move |_| {
+        let new_time = time_signal.get();
+        let new_date = date_signal.get();
+
+        let (Some(new_time), Some(new_date)) = (new_time, new_date) else {
+            logging::log!("new_time {:?} or new_date {:?} is None", new_time, new_date);
+            return;
+        };
+        let new_date_time = NaiveDateTime::new(new_date, new_time);
+        let local_date_time = naive_datetime_to_local(new_date_time);
+        let Ok(local_date_time) = local_date_time else {
+            logging::error!("local_date_time is None");
+            return;
+        };
+
+        let utc_date_time = local_date_time.to_utc();
+        save_start_time(utc_date_time);
+        start_time_rw_signal.set(Some(utc_date_time));
+    });
+
     mount_to_body(move || {
         view! {
             <h1>"聖遺物マラソン開始時間計算"</h1>
@@ -263,7 +296,11 @@ fn main() {
                 />
             </h2>
 
-            <DateTimeSet initial_time_rw_signal=start_time_rw_signal />
+            <DateTimeSet date_signal time_signal />
+            <SetCurrentTimeAsStartTime
+                set_date=date_signal.write_only()
+                set_time=time_signal.write_only()
+            />
             <Interval interval_rw_signal=interval_rw_signal />
             <hr />
 

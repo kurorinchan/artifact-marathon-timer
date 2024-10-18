@@ -118,8 +118,6 @@ fn StartTimeToday(
         Some(initial_start_time + days_since_start + offset)
     }
 
-    let (date_today, set_date_today) = create_signal(Local::now());
-
     let (current_time, set_current_time) = create_signal(Local::now());
     use_interval_fn(
         move || {
@@ -128,25 +126,21 @@ fn StartTimeToday(
         1000,
     );
 
-    create_effect(move |_| {
+    let date_today = create_memo(move |_| {
         let now = current_time.get();
-        let diff = subtract_dates(now, date_today.get());
-        if diff.num_days() != 0 {
-            set_date_today.set(now);
-        }
+        return now.format("%Y-%m-%d").to_string();
     });
 
     view! {
         <div>"現在時刻:" {move || current_time.get().format("%H:%M:%S").to_string()}</div>
 
         <div>
-            "今日(" {move || date_today.get().format("%Y-%m-%d").to_string()}
+            "今日(" {move || date_today.get()}
             ")の開始時間は"
             <span class="badge text-bg-primary">
-                // Access the date today so that this gets updated every day.
-                // The value is not used, since the time is calculated independent of the value.
-                // Note: This comment cannot be in the block below. Leptosfmt deletes it.
                 {move || {
+                    // Access the date today so that this gets updated every day.
+                    // The value is not used, since the time is calculated independent of the value.
                     let _ = date_today.get();
                     let initial_start_time = get_initial_start_time.call(());
                     let interval = interval.get();

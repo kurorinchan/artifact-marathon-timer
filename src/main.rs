@@ -217,20 +217,13 @@ fn main() {
     let interval_rw_signal: RwSignal<TimeDelta> =
         create_rw_signal(storage.get_start_interval().unwrap_or(TimeDelta::zero()));
 
-    // TODO: Clean this up. Return both date and time?
-    let start_time = storage.get_start_time();
-    let date_signal = start_time.map(|start_time| {
-        let start_time: DateTime<Local> = DateTime::from(start_time);
-        start_time.date_naive()
-    });
-    let time_signal = start_time.map(|start_time| {
-        let start_time: DateTime<Local> = DateTime::from(start_time);
-        start_time.time()
-    });
+    let start_time: Option<DateTime<Local>> = storage.get_start_time().map(DateTime::from);
 
     // These are the source of truth for the start time.
-    let date_signal: RwSignal<Option<NaiveDate>> = RwSignal::new(date_signal);
-    let time_signal: RwSignal<Option<NaiveTime>> = RwSignal::new(time_signal);
+    let date_signal: RwSignal<Option<NaiveDate>> =
+        RwSignal::new(start_time.map(|start_time| start_time.date_naive()));
+    let time_signal: RwSignal<Option<NaiveTime>> =
+        RwSignal::new(start_time.map(|start_time| start_time.time()));
 
     // Memoized drived signal for calculating the initial start time in UTC, when the user
     // interacts with the DatePicker or the TimePicker.

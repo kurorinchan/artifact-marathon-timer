@@ -10,3 +10,9 @@ gloo-storage = "0.3.0"
 leptos = { version = "0.6.15", features = ["csr"] }
 leptos-use = { version = "0.13.5", features = ["use_interval_fn"] }
 thaw = { version = "0.3.4", features = ["csr"] }
+protobuf = "3.7.1"
+
+[build-dependencies]
+protobuf-codegen = "3.7.1"
+# protobuf-codegen-pure = "2.27"
+protobuf-parse = "3.7.1"

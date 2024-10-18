@@ -13,30 +13,8 @@ use leptos_use::*;
 
 use thaw::*;
 
-const START_TIME_KEY: &str = "start_time";
-const START_INTERVAL_KEY: &str = "interval";
-
-fn save_start_time(start_time: DateTime<Utc>) -> Result<()> {
-    Ok(gloo_storage::LocalStorage::set(START_TIME_KEY, start_time)?)
-}
-
-fn get_start_time() -> Result<DateTime<Utc>> {
-    let get = gloo_storage::LocalStorage::get(START_TIME_KEY);
-    Ok(get?)
-}
-
-fn save_start_interval(interval: TimeDelta) -> Result<()> {
-    Ok(gloo_storage::LocalStorage::set(
-        START_INTERVAL_KEY,
-        interval.num_seconds(),
-    )?)
-}
-
-fn get_start_interval() -> Result<TimeDelta> {
-    let interval = gloo_storage::LocalStorage::get(START_INTERVAL_KEY)?;
-
-    TimeDelta::try_seconds(interval).ok_or(anyhow!("invalid interval"))
-}
+mod protos;
+mod storage;
 
 // Treats the parameters as dates and returns the TimeDelta.
 // In other words, the dates are treated as if they are midnight times and performs subtraction.
@@ -63,12 +41,6 @@ fn DateTimeSet(
     date_signal: RwSignal<Option<NaiveDate>>,
     time_signal: RwSignal<Option<NaiveTime>>,
 ) -> impl IntoView {
-    if let Ok(start_time) = get_start_time() {
-        let local_time: DateTime<Local> = DateTime::from(start_time);
-        date_signal.set(Some(local_time.date_naive()));
-        time_signal.set(Some(local_time.time()));
-    }
-
     view! {
         <Flex>
             <label>"開始時刻: "</label>
@@ -103,9 +75,6 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
     // Consider warning user of 0 sec interval. They might end up "catching up" and missing a few
     // artifacts.
     let (interval, set_interval) = interval_rw_signal.split();
-    if let Ok(saved_interval) = get_start_interval() {
-        set_interval.set(saved_interval);
-    }
 
     view! {
         <div>
@@ -121,7 +90,6 @@ fn Interval(interval_rw_signal: RwSignal<TimeDelta>) -> impl IntoView {
                     if let Ok(seconds) = value.parse::<i64>() {
                         let seconds = TimeDelta::seconds(seconds);
                         set_interval.set(seconds);
-                        save_start_interval(seconds);
                     } else {
                         logging::error!("Failed to parse value to integer: '{value}'");
                     }
@@ -251,11 +219,24 @@ fn DebugFeatures() -> impl IntoView {
 }
 
 fn main() {
-    let interval_rw_signal: RwSignal<TimeDelta> = create_rw_signal(TimeDelta::zero());
+    let storage = storage::Storage::new();
+    let interval_rw_signal: RwSignal<TimeDelta> =
+        create_rw_signal(storage.get_start_interval().unwrap_or(TimeDelta::zero()));
+
+    // TODO: Clean this up. Return both date and time?
+    let start_time = storage.get_start_time();
+    let date_signal = start_time.map(|start_time| {
+        let start_time: DateTime<Local> = DateTime::from(start_time);
+        start_time.date_naive()
+    });
+    let time_signal = start_time.map(|start_time| {
+        let start_time: DateTime<Local> = DateTime::from(start_time);
+        start_time.time()
+    });
 
     // These are the source of truth for the start time.
-    let date_signal: RwSignal<Option<NaiveDate>> = RwSignal::new(None);
-    let time_signal: RwSignal<Option<NaiveTime>> = RwSignal::new(None);
+    let date_signal: RwSignal<Option<NaiveDate>> = RwSignal::new(date_signal);
+    let time_signal: RwSignal<Option<NaiveTime>> = RwSignal::new(time_signal);
 
     // Memoized drived signal for calculating the initial start time in UTC, when the user
     // interacts with the DatePicker or the TimePicker.
@@ -276,8 +257,22 @@ fn main() {
         };
 
         let utc_date_time = local_date_time.to_utc();
-        save_start_time(utc_date_time);
         Some(utc_date_time)
+    });
+
+    create_effect(move |_| {
+        let value = get_initial_start_time.get();
+        if value.is_none() {
+            return;
+        }
+        let mut storage = storage::Storage::new();
+        storage.set_start_time(value.unwrap());
+    });
+
+    create_effect(move |_| {
+        let interval = interval_rw_signal.get();
+        let mut storage = storage::Storage::new();
+        storage.set_start_interval(interval)
     });
 
     let set_start_time = move |new_time: DateTime<Local>| {

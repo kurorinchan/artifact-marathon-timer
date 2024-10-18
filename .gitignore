@@ -1,2 +1,5 @@
 /target
 /dist
+
+# Generated protobufs go here.
+/src/protos

@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message StorageMessage {
+  optional string start_time_rfc3339 = 1;
+  optional int64 interval_seconds = 2;
+}

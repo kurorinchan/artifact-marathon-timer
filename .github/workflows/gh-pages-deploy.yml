@@ -37,6 +37,12 @@ jobs:
 
       - name: Add WASM target
         run: rustup target add wasm32-unknown-unknown
+      
+      # Build once so that protos are generated. The generated files are required for linting.
+      # Technically this should not be necessary with correct build.rs setup but it's safer to just
+      # build it.
+      - name: build once
+        run: cargo build --release
 
       - name: lint
         run: cargo clippy & cargo fmt
